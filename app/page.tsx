@@ -1,69 +1,118 @@
-import Image from "next/image";
+"use client";
+
+import Link from "next/link";
+import { FormEvent, useEffect, useState } from "react";
+import { analysisMethods } from "@/lib/analysis/methods";
+import { dcfScenarios, type DcfInput } from "@/lib/analysis/dcf";
+import type { MarketQuote } from "@/lib/market/brapi";
+
+const indicators = [
+  ["Crescimento", "Receita e lucro em alta", "+12,4%", "positivo", 82],
+  ["Rentabilidade", "ROE acima do setor", "24,8%", "positivo", 91],
+  ["Endividamento", "Dívida líquida / EBITDA", "1,7x", "atenção", 64],
+  ["Valuation", "Desconto vs. média histórica", "-8,2%", "positivo", 76],
+] as const;
+
+const assetLabels: Record<string, string> = { PETR4: "Petrobras PN", VALE3: "Vale ON", ITUB4: "Itaú Unibanco PN", BBAS3: "Banco do Brasil ON" };
+
+function Icon({ name }: { name: string }) {
+  const shapes: Record<string, React.ReactNode> = {
+    grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
+    search: <><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></>,
+    trend: <><path d="M3 17 9 11l4 4 8-9" /><path d="M15 6h6v6" /></>,
+    file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M8 13h8M8 17h5" /></>,
+    arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
+    chevron: <path d="m9 18 6-6-6-6" />,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{shapes[name]}</svg>;
+}
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+  const [query, setQuery] = useState("PETR4");
+  const [ticker, setTicker] = useState("PETR4");
+  const [assetType, setAssetType] = useState("Ação");
+  const [tab, setTab] = useState("Visão geral");
+  const [watching, setWatching] = useState(false);
+  const [profile, setProfile] = useState<{ name?: string | null; email?: string | null } | null>(null);
+  const [quote, setQuote] = useState<MarketQuote | null>(null);
+  const [riStatus, setRiStatus] = useState<"idle" | "running" | "done">("idle");
+  const [riError, setRiError] = useState<string | null>(null);
+  const [riSourceUrl, setRiSourceUrl] = useState("");
+  const [riResult, setRiResult] = useState<{ summary?: string; score?: number | null; ruleScore?: number | null; provider?: string; sourceTitle?: string; sourceUrl?: string; metrics?: Array<{ name: string; value: string; evidence: string; source?: "ri" | "publica"; sourceLabel?: string; sourceUrl?: string; referenceDate?: string }>; findings?: Array<{ label: string; status: "positivo" | "atenção" | "insuficiente" }>; documents?: Array<{ title: string; url: string; documentType: string }>; dcfInputs?: { freeCashFlow?: number; netDebt?: number; shares?: number } } | null>(null);
+  const [dcfInput, setDcfInput] = useState<DcfInput>({ freeCashFlow: 1000, growthRate: 0.08, discountRate: 0.12, terminalGrowthRate: 0.03, years: 5, netDebt: 500, shares: 100 });
+  const [dcfResult, setDcfResult] = useState<ReturnType<typeof dcfScenarios> | null>(null);
+  const [analysisMethod, setAnalysisMethod] = useState("convergencia");
+  const selectedMethod = analysisMethods.find(method => method.id === analysisMethod) ?? analysisMethods[0];
+  useEffect(() => { const tickerFromUrl = new URLSearchParams(window.location.search).get("ticker"); if (tickerFromUrl) { const normalized = tickerFromUrl.toUpperCase(); window.setTimeout(() => { setQuery(normalized); setTicker(normalized); }, 0); } }, []);
+  useEffect(() => { let active = true; fetch(`/api/watchlist?ticker=${encodeURIComponent(ticker)}`).then(response => response.ok ? response.json() : null).then(data => { if (active && data) setWatching(data.items.length > 0); }).catch(() => undefined); return () => { active = false; }; }, [ticker]);
+  useEffect(() => { let active = true; const clear = window.setTimeout(() => setQuote(null), 0); fetch(`/api/market-data?ticker=${encodeURIComponent(ticker)}`).then(response => response.ok ? response.json() : null).then(data => { if (active && data?.quote) setQuote(data.quote); }).catch(() => undefined); return () => { active = false; window.clearTimeout(clear); }; }, [ticker]);
+  useEffect(() => { if (analysisMethods.some(method => method.id === analysisMethod && method.assets.some(asset => asset === assetType))) return; const timeout = window.setTimeout(() => setAnalysisMethod("convergencia"), 0); return () => window.clearTimeout(timeout); }, [assetType, analysisMethod]);
+  useEffect(() => { let active = true; fetch("/api/auth/session").then(response => response.ok ? response.json() : null).then(data => { if (active && data?.user) setProfile(data.user); }).catch(() => undefined); return () => { active = false; }; }, []);
+  useEffect(() => {
+    const visible = (selector: string, show: boolean) => {
+      document.querySelectorAll<HTMLElement>(selector).forEach(element => { element.hidden = !show; });
+    };
+    const overviewOrIndicators = tab === "Visão geral" || tab === "Indicadores";
+    visible(".dashboard-grid, .indicator-grid", overviewOrIndicators);
+    visible(".lower-grid", tab === "Visão geral" || tab === "Documentos");
+    visible(".dcf-card", tab === "Indicadores");
+    visible(".section-head:not(.compact)", overviewOrIndicators);
+  }, [tab]);
+  useEffect(() => {
+    const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("button.text-button, .score-footer button"));
+    const cleanups = buttons.map(button => {
+      const text = button.textContent?.toLowerCase() ?? "";
+      const target = text.includes("ver todos") || text.includes("ver análise") ? "Indicadores" : text.includes("ver documentos") ? "Documentos" : null;
+      if (!target) return () => undefined;
+      const handler = () => setTab(target);
+      button.addEventListener("click", handler);
+      return () => button.removeEventListener("click", handler);
+    });
+    return () => cleanups.forEach(cleanup => cleanup());
+  });
+  const calculatedScore = riResult?.ruleScore ?? riResult?.score ?? null;
+  const score = calculatedScore ?? 0;
+  const scoreLabel = calculatedScore === null ? "—" : calculatedScore;
+  const profileName = profile?.name?.trim() || "Investidor";
+  const initials = profileName.split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "IN";
+  const assetLabel = assetLabels[ticker] ?? `${assetType} selecionado`;
+  const chartPoints = quote?.history.length ? (() => { const values = quote.history.map(item => item.close); const min = Math.min(...values); const max = Math.max(...values); const span = max - min || 1; return values.map((value, index) => `${(index / Math.max(values.length - 1, 1)) * 360},${86 - ((value - min) / span) * 72}`).join(" "); })() : "";
+  const recentDocuments = riResult?.documents?.length ? riResult.documents.slice(0, 3).map(document => [document.documentType, document.title, "Fonte oficial", "RI"] as const) : [["—", "Nenhum documento consultado", "Aguardando análise", "RI"] as const];
+  const insightText = riResult?.summary ?? "Execute uma análise com dados do RI para gerar um insight baseado em documentos oficiais.";
+  const metric = (name: string) => riResult?.metrics?.find(item => item.name === name)?.value;
+  const metricSource = (name: string) => riResult?.metrics?.find(item => item.name === name)?.sourceLabel ?? "não encontrado";
+  const visibleIndicators: ReadonlyArray<readonly [string, string, string, "positivo" | "atenção", number]> = riResult ? [["Rentabilidade", `ROE · Fonte: ${metricSource("ROE")}`, metric("ROE") ? `${metric("ROE")}%` : "N/D", metric("ROE") && Number(metric("ROE")?.replace(",", ".")) >= 15 ? "positivo" : "atenção", metric("ROE") ? Math.min(100, Math.max(20, Number(metric("ROE")?.replace(",", ".")) * 4)) : 0], ["Retorno sobre capital", `ROIC · Fonte: ${metricSource("ROIC")}`, metric("ROIC") ? `${metric("ROIC")}%` : "N/D", metric("ROIC") && Number(metric("ROIC")?.replace(",", ".")) >= 10 ? "positivo" : "atenção", metric("ROIC") ? Math.min(100, Math.max(20, Number(metric("ROIC")?.replace(",", ".")) * 4)) : 0], ["Valuation", `P/L · Fonte: ${metricSource("P/L")}`, metric("P/L") ? `${metric("P/L")}x` : "N/D", metric("P/L") && Number(metric("P/L")?.replace(",", ".")) <= 15 ? "positivo" : "atenção", metric("P/L") ? Math.min(100, Math.max(20, 100 - Number(metric("P/L")?.replace(",", ".")) * 4)) : 0], ["Endividamento", `Dívida líquida / EBITDA · Fonte: ${metricSource("Dívida líquida / EBITDA")}`, metric("Dívida líquida / EBITDA") ? `${metric("Dívida líquida / EBITDA")}x` : "N/D", metric("Dívida líquida / EBITDA") && Number(metric("Dívida líquida / EBITDA")?.replace(",", ".")) <= 2.5 ? "positivo" : "atenção", metric("Dívida líquida / EBITDA") ? Math.min(100, Math.max(20, 100 - Number(metric("Dívida líquida / EBITDA")?.replace(",", ".")) * 20)) : 0]] : indicators;
+  function search(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (query.trim()) { setTicker(query.trim().toUpperCase().replace(/[^A-Z0-9]/g, "")); setRiStatus("idle"); } }
+  async function toggleWatchlist() { const next = !watching; const response = await fetch(`/api/watchlist${next ? "" : `?ticker=${encodeURIComponent(ticker)}`}`, { method: next ? "POST" : "DELETE", headers: { "Content-Type": "application/json" }, body: next ? JSON.stringify({ ticker, assetType }) : undefined }); if (response.ok) setWatching(next); else { const data = await response.json().catch(() => ({})); setRiError(data.error ?? "Não foi possível atualizar o monitoramento."); } }
+  async function analyzeRi() { const methodForRequest = analysisMethods.some(method => method.id === analysisMethod && method.assets.some(asset => asset === assetType)) ? analysisMethod : "convergencia"; setRiStatus("running"); setRiError(null); setRiResult(null); try { const response = await fetch("/api/ri-analysis", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, assetType, method: methodForRequest, sourceUrl: riSourceUrl.trim() || undefined }), signal: AbortSignal.timeout(60000) }); const data = await response.json(); setRiStatus(response.ok ? "done" : "idle"); if (!response.ok) { setRiError(data.error ?? "Não foi possível consultar o RI."); return; } setRiResult(data.analysis); setRiSourceUrl(data.analysis.sourceUrl ?? riSourceUrl); if (data.analysis.dcfInputs) setDcfInput(current => ({ ...current, ...(data.analysis.dcfInputs.freeCashFlow !== undefined ? { freeCashFlow: data.analysis.dcfInputs.freeCashFlow } : {}), ...(data.analysis.dcfInputs.netDebt !== undefined ? { netDebt: data.analysis.dcfInputs.netDebt } : {}), ...(data.analysis.dcfInputs.shares !== undefined ? { shares: data.analysis.dcfInputs.shares } : {}) })); } catch (error) { setRiStatus("idle"); setRiError(error instanceof DOMException && error.name === "TimeoutError" ? "A consulta demorou mais de 60 segundos. Tente novamente ou informe diretamente a URL oficial do RI." : "Não foi possível consultar o RI. Tente novamente."); } }
+  function runDcf(event: FormEvent<HTMLFormElement>) { event.preventDefault(); try { setDcfResult(dcfScenarios(dcfInput)); } catch { setDcfResult(null); } }
+  function updateDcf(field: keyof DcfInput, value: string) { setDcfInput(current => ({ ...current, [field]: field === "years" || field === "shares" || field === "freeCashFlow" || field === "netDebt" ? Number(value) : Number(value) / 100 })); }
+
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <div className="brand"><b>F</b><span>fundamentu<span className="accent">.ia</span></span></div>
+      <div className="workspace-label">WORKSPACE</div>
+      <nav className="main-nav"><button className="nav-item active"><Icon name="grid" /> Visão geral</button><Link href="/carteira/importar" className="nav-item"><Icon name="trend" /> Minha carteira</Link><Link href="/monitorados" className="nav-item"><span className="eye">◉</span> Ativos monitorados</Link><Link href="/analises" className="nav-item"><span className="eye">◉</span> Histórico de análises</Link></nav>
+      <div className="sidebar-bottom"><Link href="/configuracoes/ia" className="nav-item"><span>⚙</span> Configurações</Link><div className="user-card"><div className="avatar">{initials}</div><div><strong>{profileName}</strong><span>{profile?.email ?? "Faça login para salvar análises"}</span></div><Link className="logout-link" href="/logout">Sair</Link></div></div>
+    </aside>
+    <main className="main-content">
+      <header className="topbar"><div><span className="eyebrow">ANÁLISE FUNDAMENTALISTA</span><h1>Olá, {profileName.split(" ")[0]} <small>✦</small></h1></div><div className="top-actions"><button className="icon-button"><Icon name="bell" /><i /></button><div className="top-avatar">{initials}</div></div></header>
+      <section className="hero-row"><div><h2>Encontre uma nova oportunidade</h2><p>Pesquise por um ativo e consulte os dados oficiais do RI.</p></div><form className="ticker-search" onSubmit={search}><Icon name="search" /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Digite um ticker (ex: PETR4)" /><select aria-label="Tipo de ativo" value={assetType} onChange={e => setAssetType(e.target.value)}><option>Ação</option><option>FII</option><option>Fiagro</option><option>ETF</option></select><button>Analisar</button></form></section>
+      <div className="tabs">{["Visão geral", "Indicadores", "Documentos", "Notícias"].map(item => <button key={item} onClick={() => setTab(item)} className={tab === item ? "tab active" : "tab"}>{item}</button>)}</div>
+      <section className="company-heading"><div className="company-logo">{ticker[0]}</div><div><div className="company-name"><h2>{ticker}</h2><span>{assetType === "Ação" ? "B3" : assetType}</span></div><p>{assetLabel} · dados oficiais de Relações com Investidores</p></div>{quote && <span className="market-quote-mini">R$ {quote.price?.toFixed(2).replace(".", ",") ?? "—"} <b>{quote.changePercent !== null ? `${quote.changePercent >= 0 ? "+" : ""}${quote.changePercent.toFixed(2).replace(".", ",")}%` : ""}</b></span>}<button className={watching ? "watch-button watching" : "watch-button"} onClick={toggleWatchlist}><b>{watching ? "✓" : "+"}</b> {watching ? "Monitorando" : "Monitorar"}</button></section>
+      <section className={`ri-panel card ${riStatus}`}><div className="ri-icon">✦</div><div className="ri-copy"><span className="card-kicker">RASTREIO INTELIGENTE · RELAÇÕES COM INVESTIDORES</span><h3>{riStatus === "done" ? "Análise do RI concluída" : riStatus === "running" ? "Agentes analisando o RI..." : "Faça uma análise com dados do RI"}</h3><p>{riStatus === "done" ? `Os agentes encontraram documentos, comunicados e eventos relevantes para ${ticker}.` : "Consulte documentos oficiais, fatos relevantes e comunicados diretamente na fonte da empresa."}</p>{riStatus !== "idle" && <div className="agent-status"><span className="agent-chip"><i /> Agente de documentos</span><span className="agent-chip"><i /> Agente de comunicados</span><span className="agent-chip"><i /> Agente de síntese</span></div>}{riError && <p className="ri-error">{riError}</p>}</div><div className="ri-controls"><input className="ri-source-input" value={riSourceUrl} onChange={event => setRiSourceUrl(event.target.value)} placeholder="URL do RI (opcional)" aria-label="URL oficial do RI" /><select className="method-select" value={analysisMethod} onChange={event => setAnalysisMethod(event.target.value)} aria-label="Método de análise">{analysisMethods.filter(method => method.assets.some(asset => asset === assetType)).map(method => <option key={method.id} value={method.id}>{method.label}</option>)}</select><div className="method-checks">{selectedMethod.checks.map(check => <span key={check}>{check}</span>)}</div></div><button className="ri-button" onClick={analyzeRi} disabled={riStatus === "running"}>{riStatus === "running" ? "Consultando RI..." : riStatus === "done" ? "Atualizar análise" : "Analisar com dados do RI"}<Icon name="arrow" /></button></section>
+      {riResult && <article className="ri-result-card card"><div className="ri-result-score"><span>CONVERGÊNCIA</span><strong>{scoreLabel}</strong><small>/100</small></div><div className="ri-result-copy"><span className="section-kicker">{riResult.provider ? `SÍNTESE DO AGENTE · ${riResult.provider}` : "COLETA DO RI CONCLUÍDA"}</span><h3>Leitura preliminar do RI</h3><p>{riResult.summary ?? "A página oficial do RI foi coletada, mas não há síntese por IA disponível. Configure uma chave de IA em Configurações para interpretar os documentos e indicadores."}</p>{riResult.findings && riResult.findings.length > 0 && <div className="finding-chips">{riResult.findings.map(finding => <span className={finding.status} key={finding.label}><i /> {finding.label}</span>)}</div>}{riResult.metrics && riResult.metrics.length > 0 && <div className="metric-chips">{riResult.metrics.map(metric => <span key={metric.name}><b>{metric.name}</b> {metric.value} · {metric.sourceLabel ?? "RI"}{metric.referenceDate ? ` (${metric.referenceDate})` : ""}</span>)}</div>}<a href={riResult.sourceUrl} target="_blank" rel="noreferrer">Fonte oficial do RI: {riResult.sourceTitle ?? riResult.sourceUrl} ↗</a>{riResult.documents && riResult.documents.length > 0 && <div className="document-links"><span className="section-kicker">DOCUMENTOS ENCONTRADOS</span>{riResult.documents.slice(0, 5).map(document => <a key={document.url} href={document.url} target="_blank" rel="noreferrer"><b>{document.documentType}</b> {document.title} ↗</a>)}</div>}</div></article>}
+      {analysisMethod === "dcf" && <section className="dcf-card card"><div className="section-head compact"><div><span className="section-kicker">VALUATION POR CENÁRIOS</span><h2>Fluxo de caixa descontado</h2></div><span className="status-pill"><i /> Simulação</span></div><form className="dcf-form" onSubmit={runDcf}>{([ ["freeCashFlow", "FCF anual", "R$ milhões", dcfInput.freeCashFlow], ["growthRate", "Crescimento", "% ao ano", dcfInput.growthRate * 100], ["discountRate", "Taxa de desconto", "% ao ano", dcfInput.discountRate * 100], ["terminalGrowthRate", "Crescimento terminal", "% ao ano", dcfInput.terminalGrowthRate * 100], ["netDebt", "Dívida líquida", "R$ milhões", dcfInput.netDebt], ["shares", "Ações", "milhões", dcfInput.shares], ["years", "Período", "anos", dcfInput.years] ] as const).map(([field, label, suffix, value]) => <label key={field}>{label}<div><input type="number" min="0" step="0.01" value={value} onChange={event => updateDcf(field, event.target.value)} /><span>{suffix}</span></div></label>)}<button className="ri-button" type="submit">Calcular cenários <Icon name="arrow" /></button></form>{dcfResult && <div className="dcf-results">{([ ["conservador", "Conservador"], ["base", "Base"], ["otimista", "Otimista"] ] as const).map(([key, label]) => <article key={key}><span>{label}</span><strong>R$ {dcfResult[key].valuePerShare.toFixed(2)}</strong><small>Valor por ação</small></article>)}</div>}<p className="disclaimer">Estimativa baseada nos parâmetros informados; não constitui recomendação de investimento.</p></section>}
+      <section className="dashboard-grid">
+        <article className="score-card card"><div className="card-heading"><div><span className="card-kicker">SCORE FUNDAMENTALISTA</span><h3>{calculatedScore === null ? "Dados insuficientes" : score >= 70 ? "Convergência positiva" : score >= 50 ? "Convergência em atenção" : "Convergência insuficiente"}</h3></div><span className="status-pill"><i /> {riResult ? calculatedScore === null ? "Coleta concluída" : "Atualizado pelo RI" : "Demonstrativo"}</span></div><div className="score-body"><div className="score-ring" style={{ background: `conic-gradient(#54d797 0 ${score}%,#e8f2ed ${score}% 100%)` }}><strong>{scoreLabel}<small>/ 100</small></strong></div><div className="score-copy"><p>{riResult ? calculatedScore === null ? "A coleta foi concluída, mas não foram encontrados indicadores numéricos suficientes para calcular o score." : "O score foi calculado a partir dos indicadores extraídos do RI e do método selecionado." : "Execute uma análise do RI para substituir este valor demonstrativo pelos dados oficiais."}</p><div className="mini-legend"><span><i className="green-dot" /> {riResult ? "Dados do RI" : "Prévia"}</span><span><i className="yellow-dot" /> Não é recomendação</span></div></div></div><div className="score-footer"><span>{riResult ? `Método: ${selectedMethod.label}` : "Aguardando análise do RI"}</span><button>Ver análise completa <Icon name="arrow" /></button></div></article>
+        <article className="price-card card"><div className="card-heading"><span className="card-kicker">COTAÇÃO ATUAL</span><span className="market-open"><i /> {quote ? "Fonte conectada" : "Aguardando fonte"}</span></div><div className="price-line"><strong>{quote?.price !== null && quote?.price !== undefined ? `R$ ${quote.price.toFixed(2).replace(".", ",")}` : "—"}</strong>{quote?.changePercent !== null && quote?.changePercent !== undefined && <b>{quote.changePercent >= 0 ? "+" : ""}{quote.changePercent.toFixed(2).replace(".", ",")}%</b>}</div><span className="price-time">{quote ? `Atualizado em ${new Date(quote.updatedAt).toLocaleTimeString("pt-BR")}` : "Cotação indisponível no momento"}</span>{chartPoints ? <><div className="chart"><svg viewBox="0 0 360 96" preserveAspectRatio="none"><polyline points={chartPoints} fill="none" stroke="#55d69a" strokeWidth="2.5" /></svg></div><div className="chart-labels"><span>1 mês atrás</span><span>Hoje</span></div></> : <div className="chart-empty">Histórico indisponível no momento.</div>}</article>
+      </section>
+      <section className="section-head"><div><span className="section-kicker">LEITURA DOS FUNDAMENTOS</span><h2>Indicadores que merecem atenção</h2></div><button className="text-button">Ver todos <Icon name="arrow" /></button></section>
+      <section className="indicator-grid">{visibleIndicators.map(([name, description, value, status, indicatorScore]) => <article className="indicator-card card" key={name}><div className="indicator-top"><span className={`indicator-icon ${status}`}><Icon name={name === "Crescimento" ? "trend" : "grid"} /></span><span className={`indicator-status ${status}`}>{status === "positivo" ? "Positivo" : "Atenção"}</span></div><h3>{name}</h3><p>{description}</p><div className="indicator-value"><strong>{value}</strong><span>{indicatorScore}/100</span></div><div className="progress"><i style={{ width: `${indicatorScore}%` }} /></div></article>)}</section>
+      <section className="lower-grid"><article className="documents-card card"><div className="section-head compact"><div><span className="section-kicker">RASTREIO DA EMPRESA</span><h2>Documentos recentes</h2></div><button className="text-button">Ver documentos <Icon name="arrow" /></button></div>{recentDocuments.map(doc => <div className="document-row" key={doc[1]}><span className="document-icon"><Icon name="file" /></span><div><strong>{doc[1]}</strong><span>{doc[0]} · {doc[2]}</span></div><em>{doc[3]}</em><Icon name="chevron" /></div>)}</article><article className="insight-card card"><span className="section-kicker">INSIGHT DA IA</span><strong className="sparkle">✦</strong><h2>O que está movendo a tese?</h2><p>{insightText}</p><button className="insight-button">Ler resumo completo <Icon name="arrow" /></button></article></section>
+      {tab === "Notícias" && <section className="tab-news-panel card"><span className="section-kicker">NOTÍCIAS E COMUNICADOS</span><h2>Notícias do ativo</h2><p>Os comunicados e fatos relevantes encontrados durante o rastreio do RI aparecerão aqui.</p>{riResult?.documents?.filter(document => /fato|comunicado|not[ií]cia/i.test(`${document.documentType} ${document.title}`)).map(document => <a key={document.url} href={document.url} target="_blank" rel="noreferrer"><b>{document.documentType}</b> {document.title} ↗</a>)}{(!riResult || !riResult.documents?.some(document => /fato|comunicado|not[ií]cia/i.test(`${document.documentType} ${document.title}`))) && <span className="empty-tab-note">Execute uma análise do RI para consultar comunicados.</span>}</section>}
+      <footer className="disclaimer"><span>Dados demonstrativos para protótipo</span><span>Não constitui recomendação de investimento</span></footer>
+    </main>
+  </div>;
 }

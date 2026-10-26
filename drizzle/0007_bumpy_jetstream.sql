@@ -1,0 +1,1 @@
+ALTER TABLE `ri_analyses` ADD `metrics` text;

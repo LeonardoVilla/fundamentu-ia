@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fundamentu.ia">
+  <rect width="64" height="64" rx="16" fill="#0f4d3d"/>
+  <path d="M18 16h18.5c8.56 0 14.5 4.56 14.5 11.5S45.06 39 36.5 39H27v9H18V16Zm9 8v7h8.5c3.65 0 6.5-1.08 6.5-3.5S39.15 24 35.5 24H27Z" fill="#8ee6bd"/>
+  <circle cx="48" cy="48" r="5" fill="#2bb673"/>
+</svg>

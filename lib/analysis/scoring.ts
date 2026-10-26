@@ -1,0 +1,28 @@
+import type { ExtractedMetric } from "./metrics";
+
+type Finding = { label: string; status: "positivo" | "atenção" | "insuficiente" };
+export type RuleScore = { score: number | null; findings: Finding[] };
+function value(metrics: ExtractedMetric[], name: string): number | null { const metric = metrics.find((item) => item.name === name); if (!metric) return null; const number = Number(metric.value.replace(",", ".")); return Number.isFinite(number) ? number : null; }
+export function scoreMethod(method: string, metrics: ExtractedMetric[]): RuleScore {
+  const findings: Finding[] = [];
+  if (method === "convergencia") {
+    const rules: Array<{ name: string; label: string; positive: (value: number) => boolean }> = [
+      { name: "Dividend yield", label: "Dividend yield ≥ 6%", positive: (value) => value >= 6 },
+      { name: "ROE", label: "ROE ≥ 15%", positive: (value) => value >= 15 },
+      { name: "ROIC", label: "ROIC ≥ 10%", positive: (value) => value >= 10 },
+      { name: "P/L", label: "P/L até 15x", positive: (value) => value > 0 && value <= 15 },
+      { name: "P/VP", label: "P/VP até 1,5x", positive: (value) => value > 0 && value <= 1.5 },
+      { name: "Dívida líquida / EBITDA", label: "Alavancagem até 2,5x", positive: (value) => value >= 0 && value <= 2.5 },
+    ];
+    const evaluated = rules.flatMap((rule) => { const current = value(metrics, rule.name); if (current === null) return []; const positive = rule.positive(current); findings.push({ label: `${rule.label} (${current})`, status: positive ? "positivo" : "atenção" }); return [positive ? 100 : 45]; });
+    if (!evaluated.length) return { score: null, findings: [{ label: "Nenhum indicador de convergência encontrado", status: "insuficiente" }] };
+    return { score: Math.round(evaluated.reduce((sum, item) => sum + item, 0) / evaluated.length), findings };
+  }
+  if (method === "bazin") { const dy = value(metrics, "Dividend yield"); if (dy === null) return { score: null, findings: [{ label: "Dividend yield não encontrado", status: "insuficiente" }] }; findings.push({ label: `DY ${dy}%`, status: dy >= 6 ? "positivo" : "atenção" }); return { score: Math.min(100, Math.round((dy / 6) * 80)), findings }; }
+  if (method === "graham") { const pl = value(metrics, "P/L"); const pvp = value(metrics, "P/VP"); if (pl === null && pvp === null) return { score: null, findings: [{ label: "P/L e P/VP não encontrados", status: "insuficiente" }] }; let points = 0; if (pl !== null) { points += pl <= 15 ? 50 : 20; findings.push({ label: `P/L ${pl}`, status: pl <= 15 ? "positivo" : "atenção" }); } if (pvp !== null) { points += pvp <= 1.5 ? 50 : 20; findings.push({ label: `P/VP ${pvp}`, status: pvp <= 1.5 ? "positivo" : "atenção" }); } return { score: Math.round(points * (pl !== null && pvp !== null ? 1 : 0.7)), findings }; }
+  if (method === "buffett") { const roe = value(metrics, "ROE"); const roic = value(metrics, "ROIC"); if (roe === null && roic === null) return { score: null, findings: [{ label: "ROE e ROIC não encontrados", status: "insuficiente" }] }; const values = [roe, roic].filter((item): item is number => item !== null); const score = values.reduce((sum, item) => sum + (item >= 15 ? 100 : item >= 10 ? 70 : 40), 0) / values.length; return { score: Math.round(score), findings: values.map((item) => ({ label: `Retorno ${item}%`, status: item >= 15 ? "positivo" : "atenção" })) }; }
+  if (method === "magic-formula") { const roic = value(metrics, "ROIC"); const earningsYield = value(metrics, "Earnings yield"); if (roic === null && earningsYield === null) return { score: null, findings: [{ label: "ROIC e earnings yield não encontrados", status: "insuficiente" }] }; let score = 0; if (roic !== null) { score += roic >= 15 ? 50 : 25; findings.push({ label: `ROIC ${roic}%`, status: roic >= 15 ? "positivo" : "atenção" }); } if (earningsYield !== null) { score += earningsYield >= 6 ? 50 : 25; findings.push({ label: `Earnings yield ${earningsYield}%`, status: earningsYield >= 6 ? "positivo" : "atenção" }); } return { score: Math.round(score * (roic !== null && earningsYield !== null ? 1 : 0.7)), findings }; }
+  if (method === "fundos") { const dy = value(metrics, "Dividend yield"); const pvp = value(metrics, "P/VP"); const vacancy = value(metrics, "Vacância"); if (dy === null && pvp === null && vacancy === null) return { score: null, findings: [{ label: "Yield, P/VP e vacância não encontrados", status: "insuficiente" }] }; let score = 0; if (dy !== null) { score += dy >= 8 ? 40 : 20; findings.push({ label: `Yield ${dy}%`, status: dy >= 8 ? "positivo" : "atenção" }); } if (pvp !== null) { score += pvp <= 1 ? 30 : 15; findings.push({ label: `P/VP ${pvp}`, status: pvp <= 1 ? "positivo" : "atenção" }); } if (vacancy !== null) { score += vacancy <= 10 ? 30 : 10; findings.push({ label: `Vacância ${vacancy}%`, status: vacancy <= 10 ? "positivo" : "atenção" }); } return { score: Math.min(100, score), findings }; }
+  if (method === "etf") { const fee = value(metrics, "Taxa de administração"); const tracking = value(metrics, "Tracking difference"); if (fee === null && tracking === null) return { score: null, findings: [{ label: "Taxa e tracking difference não encontrados", status: "insuficiente" }] }; let score = 0; if (fee !== null) { score += fee <= 0.5 ? 60 : 30; findings.push({ label: `Taxa ${fee}%`, status: fee <= 0.5 ? "positivo" : "atenção" }); } if (tracking !== null) { score += tracking <= 1 ? 40 : 15; findings.push({ label: `Tracking ${tracking}%`, status: tracking <= 1 ? "positivo" : "atenção" }); } return { score: Math.min(100, score), findings }; }
+  return { score: null, findings: [{ label: "Aguardando indicadores estruturados do método", status: "insuficiente" }] };
+}
