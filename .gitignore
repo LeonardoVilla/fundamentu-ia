@@ -21,6 +21,11 @@
 /build
 local.db
 local.db-*
+demo.db
+demo.db-*
+demo-screenshots.db
+demo-screenshots.db-*
+demo-screenshots-*.db
 
 # misc
 .DS_Store

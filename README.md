@@ -18,6 +18,30 @@ A aplicação começa com autenticação Google para proteger carteira, credenci
 
 As telas internas de análise, carteira e configurações dependem de sessão autenticada e não são publicadas com dados de usuário no repositório.
 
+### Dashboard de análise
+
+![Dashboard de análise fundamentalista](public/screenshots/dashboard.png)
+
+### Carteira importada
+
+![Visão da carteira importada](public/screenshots/carteira.png)
+
+### Histórico de análises
+
+![Histórico de análises do RI](public/screenshots/analises.png)
+
+### Gerenciamento de provedores de IA
+
+![Configuração dos provedores de IA](public/screenshots/configuracoes-ia.png)
+
+### Agentes especializados
+
+![Configuração dos agentes especializados](public/screenshots/agentes.png)
+
+### Preparação para o IRPF
+
+![Assistente de preparação do IRPF](public/screenshots/irpf.png)
+
 ## O que o projeto demonstra
 
 - Construção de uma aplicação full-stack moderna com Next.js e React.
@@ -205,6 +229,18 @@ npm run dev
 ```
 
 A aplicação fica disponível em `http://localhost:3000`. O endpoint de saúde pode ser consultado em `http://localhost:3000/api/health`.
+
+### Base de demonstração
+
+Para reproduzir as telas ilustradas no README com dados fictícios, use uma base SQLite separada da configuração de produção:
+
+```powershell
+$env:DATABASE_URL = "file:./demo-screenshots.db"
+$env:DATABASE_AUTH_TOKEN = ""
+node scripts/seed-demo.mjs
+```
+
+O seed cria um usuário demonstrativo, posições de carteira, análise de PETR4, fontes de RI, agentes de IA e lançamentos de IRPF. A base fica ignorada pelo Git e não contém dados reais.
 
 ## Comandos úteis
 
