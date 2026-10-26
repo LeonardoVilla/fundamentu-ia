@@ -8,6 +8,16 @@ Repositório: [github.com/LeonardoVilla/fundamentu-ia](https://github.com/Leonar
 
 > Projeto de portfólio. As análises são informativas e não constituem recomendação de investimento.
 
+## Visão da aplicação
+
+### Autenticação com Google
+
+A aplicação começa com autenticação Google para proteger carteira, credenciais dos agentes e histórico de análises.
+
+![Tela de login do Fundamentu.ia](public/screenshots/login.png)
+
+As telas internas de análise, carteira e configurações dependem de sessão autenticada e não são publicadas com dados de usuário no repositório.
+
 ## O que o projeto demonstra
 
 - Construção de uma aplicação full-stack moderna com Next.js e React.
